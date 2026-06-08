@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PlumeEst — Atmospheric Dispersion Calculator</title>
+
+  <!-- KaTeX for formula rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"/>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+    onload="renderMathInElement(document.body, {delimiters: [
+      {left:'$$',right:'$$',display:true},
+      {left:'$',right:'$',display:false}
+    ]})"></script>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <!-- Leaflet heatmap plugin -->
+  <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">Plume<span class="accent">Est</span>
+    <span class="tagline">— Gaussian atmospheric dispersion calculator</span>
+  </div>
+  <a class="gh-btn" href="https://github.com" target="_blank">⭐ View source on GitHub</a>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('input', this)">⚙ Input</button>
+  <button class="tab" onclick="switchTab('results', this)">🗺 Results</button>
+  <button class="tab" onclick="switchTab('learn', this)">📐 Learn</button>
+</div>
+
+<!-- ═══════════════════════════ INPUT TAB ═══════════════════════════ -->
+<div class="panel active" id="panel-input">
+  <div class="panel-inner">
+    <p class="panel-desc">
+      Enter emission source parameters below. All fields are required.
+      The engine will compute ground-level pollutant concentrations using
+      the <strong>Gaussian plume model</strong> and Briggs plume rise equations.
+    </p>
+
+    <form id="sim-form">
+      <div class="form-section-title">📍 Source location</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="lat">Latitude</label>
+          <input id="lat" name="lat" type="number" step="0.0001"
+                 value="20.2961" required/>
+          <div class="hint">Decimal degrees, e.g. 20.2961</div>
+        </div>
+        <div class="form-group">
+          <label for="lon">Longitude</label>
+          <input id="lon" name="lon" type="number" step="0.0001"
+                 value="85.8189" required/>
+          <div class="hint">Decimal degrees, e.g. 85.8189</div>
+        </div>
+      </div>
+
+      <div class="form-section-title">🏭 Emission parameters</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="emission_rate">Emission rate (g/s)</label>
+          <input id="emission_rate" name="emission_rate" type="number"
+                 step="0.1" value="150" min="0.1" required/>
+        </div>
+        <div class="form-group">
+          <label for="stack_height">Stack height (m)</label>
+          <input id="stack_height" name="stack_height" type="number"
+                 step="1" value="120" min="1" required/>
+        </div>
+        <div class="form-group">
+          <label for="stack_radius">Stack radius (m)</label>
+          <input id="stack_radius" name="stack_radius" type="number"
+                 step="0.1" value="2.5" min="0.1" required/>
+        </div>
+        <div class="form-group">
+          <label for="exit_velocity">Stack exit velocity (m/s)</label>
+          <input id="exit_velocity" name="exit_velocity" type="number"
+                 step="0.1" value="12" min="0.1" required/>
+        </div>
+        <div class="form-group">
+          <label for="stack_temp">Stack gas temperature (°C)</label>
+          <input id="stack_temp" name="stack_temp" type="number"
+                 step="1" value="180" required/>
+        </div>
+        <div class="form-group">
+          <label for="pollutant">Pollutant type</label>
+          <select id="pollutant" name="pollutant">
+            <option value="PM2.5">PM2.5</option>
+            <option value="PM10">PM10</option>
+            <option value="SO2" selected>SO₂</option>
+            <option value="NOx">NOₓ</option>
+            <option value="CO">CO</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-section-title">🌬 Meteorological conditions</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="wind_speed">Wind speed (m/s)</label>
+          <input id="wind_speed" name="wind_speed" type="number"
+                 step="0.1" value="4.2" min="0.1" required/>
+        </div>
+        <div class="form-group">
+          <label for="wind_dir">Wind direction (°)</label>
+          <input id="wind_dir" name="wind_dir" type="number"
+                 step="1" value="225" min="0" max="360" required/>
+          <div class="hint">Direction wind is blowing FROM. 0=N, 90=E, 180=S, 270=W</div>
+        </div>
+        <div class="form-group">
+          <label for="stability">Atmospheric stability class</label>
+          <select id="stability" name="stability">
+            <option value="0">A — Extremely unstable</option>
+            <option value="1">B — Moderately unstable</option>
+            <option value="2" selected>C — Slightly unstable</option>
+            <option value="3">D — Neutral</option>
+            <option value="4">E — Slightly stable</option>
+            <option value="5">F — Moderately stable</option>
+          </select>
+          <div class="hint">See the Learn tab for guidance on choosing this</div>
+        </div>
+        <div class="form-group">
+          <label for="mixing_height">Mixing height (m)</label>
+          <input id="mixing_height" name="mixing_height" type="number"
+                 step="10" value="800" min="50" required/>
+          <div class="hint">Boundary layer depth — typically 500–2000 m</div>
+        </div>
+        <div class="form-group">
+          <label for="ambient_temp">Ambient temperature (°C)</label>
+          <input id="ambient_temp" name="ambient_temp" type="number"
+                 step="1" value="28" required/>
+        </div>
+        <div class="form-group">
+          <label for="grid_extent">Grid extent (m)</label>
+          <input id="grid_extent" name="grid_extent" type="number"
+                 step="500" value="10000" min="1000" required/>
+          <div class="hint">Half-width of simulation area — 10000 = 20 km × 20 km grid</div>
+        </div>
+      </div>
+
+      <button type="submit" class="run-btn" id="run-btn">
+        Run simulation →
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ RESULTS TAB ═══════════════════════════ -->
+<div class="panel" id="panel-results">
+  <div class="panel-inner">
+
+    <div id="results-placeholder" class="placeholder-box">
+      Run a simulation from the Input tab to see results here.
+    </div>
+
+    <div id="results-content" style="display:none">
+      <div class="stat-row">
+        <div class="stat">
+          <div class="stat-val" id="stat-danger-radius">—</div>
+          <div class="stat-lbl">Danger radius (WHO limit)</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="stat-peak-conc">—</div>
+          <div class="stat-lbl">Peak ground concentration</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="stat-eff-height">—</div>
+          <div class="stat-lbl">Effective stack height</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="stat-wind-dir">—</div>
+          <div class="stat-lbl">Wind direction</div>
+        </div>
+      </div>
+
+      <div id="map"></div>
+
+      <div class="ai-box">
+        <div class="ai-text" id="ai-text">—</div>
+      </div>
+
+      <div class="legend">
+        <span class="legend-title">Concentration (µg/m³)</span>
+        <div class="legend-bar"></div>
+        <div class="legend-labels">
+          <span>0</span><span>Low</span><span>Moderate</span>
+          <span>High</span><span>Danger</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+    <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-title">Concentration vs. downwind distance</div>
+          <div class="chart-subtitle">Ground-level centreline (y = 0), µg/m³</div>
+          <canvas id="chart-downwind" height="200"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Crosswind concentration profile</div>
+          <div class="chart-subtitle">At peak downwind distance, µg/m³</div>
+          <canvas id="chart-crosswind" height="200"></canvas>
+        </div>
+      </div>
+
+</div><!-- end results-content -->
+
+<!-- ═══════════════════════════ LEARN TAB ═══════════════════════════ -->
+<div class="panel" id="panel-learn">
+  <div class="panel-inner">
+
+    <h2 class="learn-title">How PlumeEst works</h2>
+    <p class="learn-intro">
+      PlumeEst implements the <strong>Gaussian plume dispersion model</strong>,
+      the industry-standard method used by environmental agencies (US EPA, CPCB)
+      for estimating steady-state atmospheric pollutant concentrations downwind
+      of a continuous point source. The full source code is open and available
+      on GitHub.
+    </p>
+
+    <div class="formula-card">
+      <div class="formula-title">1. Ground-level concentration</div>
+      <div class="formula-block">
+        $$C(x,y,0) = \frac{Q}{\pi \, u \, \sigma_y \, \sigma_z}
+          \exp\!\left(-\frac{y^2}{2\sigma_y^2}\right)
+          \exp\!\left(-\frac{H^2}{2\sigma_z^2}\right)$$
+      </div>
+      <div class="formula-params">
+        <div class="param-row"><span class="param-sym">$C$</span><span class="param-desc">ground-level concentration (µg/m³)</span></div>
+        <div class="param-row"><span class="param-sym">$Q$</span><span class="param-desc">emission rate (g/s)</span></div>
+        <div class="param-row"><span class="param-sym">$u$</span><span class="param-desc">mean wind speed at stack height (m/s)</span></div>
+        <div class="param-row"><span class="param-sym">$\sigma_y, \sigma_z$</span><span class="param-desc">horizontal and vertical dispersion coefficients (m)</span></div>
+        <div class="param-row"><span class="param-sym">$H$</span><span class="param-desc">effective stack height = physical height + plume rise (m)</span></div>
+        <div class="param-row"><span class="param-sym">$x, y$</span><span class="param-desc">downwind and crosswind distances from source (m)</span></div>
+      </div>
+    </div>
+
+    <div class="formula-card">
+      <div class="formula-title">2. Pasquill-Gifford dispersion coefficients (Briggs rural)</div>
+      <div class="formula-block">
+        $$\sigma_y(x) = a \, x \left(1 + b \, x\right)^{-1/2}$$
+        $$\sigma_z(x) = c \, x^d$$
+      </div>
+      <div class="formula-params">
+        <div class="param-row"><span class="param-sym">$a, b$</span><span class="param-desc">horizontal spread coefficients — depend on stability class</span></div>
+        <div class="param-row"><span class="param-sym">$c, d$</span><span class="param-desc">vertical spread coefficients — depend on stability class</span></div>
+      </div>
+    </div>
+
+    <div class="formula-card">
+      <div class="formula-title">3. Briggs plume rise</div>
+      <div class="formula-block">
+        $$F = g \, v_s \, r^2 \, \frac{T_s - T_a}{T_s}$$
+        $$\Delta H = \frac{1.6 \, F^{1/3} \, x_f^{2/3}}{u}$$
+      </div>
+      <div class="formula-params">
+        <div class="param-row"><span class="param-sym">$F$</span><span class="param-desc">buoyancy flux parameter (m⁴/s³)</span></div>
+        <div class="param-row"><span class="param-sym">$v_s$</span><span class="param-desc">stack exit velocity (m/s)</span></div>
+        <div class="param-row"><span class="param-sym">$r$</span><span class="param-desc">stack radius (m)</span></div>
+        <div class="param-row"><span class="param-sym">$T_s, T_a$</span><span class="param-desc">stack gas and ambient temperature (K)</span></div>
+        <div class="param-row"><span class="param-sym">$x_f$</span><span class="param-desc">distance to final plume rise (m)</span></div>
+        <div class="param-row"><span class="param-sym">$\Delta H$</span><span class="param-desc">plume rise above stack (m)</span></div>
+      </div>
+    </div>
+
+    <div class="learn-subtitle">Pasquill-Gifford stability classes</div>
+    <table class="learn-table">
+      <thead>
+        <tr><th>Class</th><th>Description</th><th>Typical conditions</th><th>Dispersion</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="badge badge-a">A</span></td><td>Extremely unstable</td><td>Strong insolation, wind &lt; 2 m/s</td><td>Very fast</td></tr>
+        <tr><td><span class="badge badge-b">B</span></td><td>Moderately unstable</td><td>Moderate insolation</td><td>Fast</td></tr>
+        <tr><td><span class="badge badge-c">C</span></td><td>Slightly unstable</td><td>Weak insolation</td><td>Moderate</td></tr>
+        <tr><td><span class="badge badge-d">D</span></td><td>Neutral</td><td>Overcast day or night</td><td>Slow</td></tr>
+        <tr><td><span class="badge badge-e">E</span></td><td>Slightly stable</td><td>Clear night, moderate wind</td><td>Slower</td></tr>
+        <tr><td><span class="badge badge-f">F</span></td><td>Moderately stable</td><td>Clear night, light wind</td><td>Slowest</td></tr>
+      </tbody>
+    </table>
+
+    <div class="learn-subtitle">WHO air quality guidelines (24-hour mean)</div>
+    <table class="learn-table">
+      <thead>
+        <tr><th>Pollutant</th><th>WHO safe limit</th><th>Interim target</th><th>Health effect</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PM2.5</td><td>15 µg/m³</td><td>25 µg/m³</td><td>Cardiovascular, respiratory</td></tr>
+        <tr><td>PM10</td><td>45 µg/m³</td><td>75 µg/m³</td><td>Respiratory irritation</td></tr>
+        <tr><td>SO₂</td><td>40 µg/m³</td><td>125 µg/m³</td><td>Asthma, lung damage</td></tr>
+        <tr><td>NO₂</td><td>25 µg/m³</td><td>50 µg/m³</td><td>Airway inflammation</td></tr>
+        <tr><td>CO</td><td>4 mg/m³</td><td>—</td><td>Oxygen displacement</td></tr>
+      </tbody>
+    </table>
+
+    <div class="learn-subtitle">References</div>
+    <ul class="references">
+      <li>Seinfeld & Pandis, <em>Atmospheric Chemistry and Physics</em>, Wiley, 2016</li>
+      <li>US EPA, <em>Workbook of Atmospheric Dispersion Estimates</em>, AP-26</li>
+      <li>Briggs, G.A., <em>Plume Rise</em>, USAEC Critical Review Series, 1969</li>
+      <li>WHO, <em>Air Quality Guidelines Global Update</em>, 2021</li>
+      <li>Claude Sonnet 4.6, Anthropic, 2026</li>
+    </ul>
+
+  </div>
+</div>
+
+<script src="/static/js/map.js"></script>
+</body>
+</html>
