@@ -6,3 +6,4 @@ numpy==2.2.6
 requests==2.32.5
 setuptools>=82
 wheel>=0.47
+gunicorn
